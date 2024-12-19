@@ -35,40 +35,44 @@ abstract class ServiceUtils {
     return _englishMatcherRegex.hasMatch(text);
   }
 
-  static String clearArtistsOfTitle(String title, List<String> artists) {
-    return title
-        .replaceAll(RegExp(artists.join("|"), caseSensitive: false), "")
-        .trim();
+import 'package:diacritic/diacritic.dart'; // For removing accents
+
+static String clearArtistsOfTitle(String title, List<String> artists) {
+  // Normalize the title and artists for matching
+  String normalizedTitle = removeDiacritics(title.toLowerCase()).trim();
+  List<String> normalizedArtists =
+      artists.map((artist) => removeDiacritics(artist.toLowerCase()).trim()).toList();
+
+  // Remove each artist name from the title
+  for (String artist in normalizedArtists) {
+    final artistRegex = RegExp(r"\b" + RegExp.escape(artist) + r"\b", caseSensitive: false);
+    normalizedTitle = normalizedTitle.replaceAll(artistRegex, "").trim();
   }
 
-  static String getTitle(
-    String title, {
-    List<String> artists = const [],
-    bool onlyCleanArtist = false,
-  }) {
-    final match = RegExp(r"(?<=\().+?(?=\))").firstMatch(title)?.group(0);
-    final artistInBracket =
-        artists.any((artist) => match?.contains(artist) ?? false);
+  return normalizedTitle;
+}
 
-    if (artistInBracket) {
-      title = title.replaceAll(
-        RegExp(" *\\([^)]*\\) *"),
-        '',
-      );
-    }
+static String getTitle(
+  String title, {
+  List<String> artists = const [],
+  bool onlyCleanArtist = false,
+}) {
+  // Normalize title and remove text in irrelevant brackets
+  title = title
+      .toLowerCase()
+      .replaceAll(RegExp(r"\s*\([^)]*(live|official|lyrics|video)[^)]*\)", caseSensitive: false), ' ')
+      .replaceAll(RegExp(r"\[.*?\]"), '') // Remove text in square brackets
+      .replaceAll(RegExp(r"feat\.?|ft\.", caseSensitive: false), '') // Remove "feat." and "ft."
+      .replaceAll(RegExp(r"\s+"), ' ') // Remove extra spaces
+      .trim();
 
+  // Remove artists from title
+  if (!onlyCleanArtist) {
     title = clearArtistsOfTitle(title, artists);
-    if (onlyCleanArtist) {
-      artists = [];
-    }
-
-    return "$title ${artists.map((e) => e.replaceAll(",", " ")).join(", ")}"
-        .toLowerCase()
-        .replaceAll(RegExp(r"\s*\[[^\]]*]"), ' ')
-        .replaceAll(RegExp(r"\sfeat\.|\sft\."), ' ')
-        .replaceAll(RegExp(r"\s+"), ' ')
-        .trim();
   }
+
+  return title;
+}
 
   static Future<String?> extractLyrics(Uri url) async {
     final response = await globalDio.getUri(
